@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mysql-migration-compare-platform"
+version = "0.1.0"
+description = "End-to-end MySQL migration schema and data comparison platform."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Migration Compare Platform" }]
+dependencies = [
+  "PyMySQL>=1.1.0",
+]
+
+[project.scripts]
+migration-compare = "migration_compare.cli:main"
+
+[tool.setuptools]
+packages = ["migration_compare"]
