@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -117,7 +116,7 @@ class WebAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("缺少必填字段", response.data.decode("utf-8"))
 
-    def test_compare_result_and_download_endpoints(self) -> None:
+    def test_compare_result_page(self) -> None:
         form_data = self._valid_form_data()
         response = self.client.post("/compare", data=form_data)
         self.assertEqual(response.status_code, 200)
@@ -126,34 +125,18 @@ class WebAppTestCase(unittest.TestCase):
         self.assertIn("原始查询结果（可折叠）", body)
         self.assertIn("<details", body)
         self.assertIn("当前第 1 / 1 页", body)
-        self.assertIn("fake_report.json", body)
         self.assertIsNotNone(self.last_config)
         self.assertEqual(self.last_config.max_report_samples, 20)
 
-        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
-        self.assertIsNotNone(report_id_match)
-        report_id = report_id_match.group(1)
-
-        json_response = self.client.get(f"/download/{report_id}/json")
-        self.assertEqual(json_response.status_code, 200)
-        self.assertEqual(json_response.mimetype, "application/json")
-        json_response.close()
-
-        markdown_response = self.client.get(f"/download/{report_id}/markdown")
-        self.assertEqual(markdown_response.status_code, 200)
-        self.assertEqual(markdown_response.mimetype, "text/markdown")
-        markdown_response.close()
-
-        unknown_response = self.client.get(f"/download/{report_id}/invalid")
-        self.assertEqual(unknown_response.status_code, 400)
+    def test_download_route_removed(self) -> None:
+        response = self.client.get("/download/any/json")
+        self.assertEqual(response.status_code, 404)
 
     def test_result_endpoint_supports_raw_data_pagination(self) -> None:
         response = self.client.post("/compare", data=self._valid_form_data())
         self.assertEqual(response.status_code, 200)
-        body = response.data.decode("utf-8")
-        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
-        self.assertIsNotNone(report_id_match)
-        report_id = report_id_match.group(1)
+        report_registry = self.app.config["REPORT_REGISTRY"]
+        report_id = next(iter(report_registry))
 
         page_response = self.client.get(f"/result/{report_id}?source_page=2&target_page=3&page_size=1")
         self.assertEqual(page_response.status_code, 200)

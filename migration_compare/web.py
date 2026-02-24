@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from flask import Flask, Response, render_template, request, send_file
+from flask import Flask, Response, render_template, request
 from pymysql import err as pymysql_err
 
 from .models import CompareConfig, DbConnection, EndpointConfig, TableIdentifier
@@ -28,8 +28,6 @@ MAX_PAGE_SIZE = 500
 class StoredReport:
     report_id: str
     created_at: str
-    json_path: Path
-    markdown_path: Path
     report: dict[str, Any]
 
 
@@ -59,8 +57,6 @@ def create_app(
             "result.html",
             report=report_view,
             report_id=stored.report_id,
-            json_name=stored.json_path.name,
-            markdown_name=stored.markdown_path.name,
             source_pagination=source_pagination,
             target_pagination=target_pagination,
             page_size=page_size,
@@ -81,7 +77,7 @@ def create_app(
         try:
             report = app.config["COMPARE_RUNNER"](config)
             _decorate_report_for_web(report)
-            json_path, markdown_path = app.config["REPORT_WRITER"](report, config.output_dir)
+            app.config["REPORT_WRITER"](report, config.output_dir)
         except Exception as exc:  # noqa: BLE001 - UI endpoint needs a single error response
             return render_template(
                 "index.html",
@@ -93,8 +89,6 @@ def create_app(
         stored_report = StoredReport(
             report_id=report_id,
             created_at=datetime.now(timezone.utc).isoformat(),
-            json_path=json_path,
-            markdown_path=markdown_path,
             report=report,
         )
         app.config["REPORT_REGISTRY"][report_id] = stored_report
@@ -122,25 +116,6 @@ def create_app(
             target_page=target_page,
             page_size=page_size,
         )
-
-    @app.get("/download/<report_id>/<format_name>")
-    def download(report_id: str, format_name: str) -> Response:
-        stored = app.config["REPORT_REGISTRY"].get(report_id)
-        if stored is None:
-            return Response("未知报告 ID。", status=404)
-
-        if format_name == "json":
-            path = stored.json_path
-            mimetype = "application/json"
-        elif format_name == "markdown":
-            path = stored.markdown_path
-            mimetype = "text/markdown"
-        else:
-            return Response("不支持的下载格式。", status=400)
-
-        if not path.exists():
-            return Response("报告文件不存在或已被清理。", status=404)
-        return send_file(path, as_attachment=True, download_name=path.name, mimetype=mimetype)
 
     return app
 
