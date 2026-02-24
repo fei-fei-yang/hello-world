@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -69,7 +68,10 @@ class WebAppTestCase(unittest.TestCase):
                         "database": "db_src",
                         "table": "orders",
                         "primary_key": ["id"],
-                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "columns": [
+                            {"name": "id", "column_type": "bigint"},
+                            {"name": "name", "column_type": "varchar(64)"},
+                        ],
                         "rows": [
                             {"id": 1, "name": "Alice-1"},
                             {"id": 2, "name": "Alice-2"},
@@ -80,7 +82,10 @@ class WebAppTestCase(unittest.TestCase):
                         "database": "db_tgt",
                         "table": "orders",
                         "primary_key": ["id"],
-                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "columns": [
+                            {"name": "id", "column_type": "bigint"},
+                            {"name": "name", "column_type": "varchar(64)"},
+                        ],
                         "rows": [
                             {"id": 1, "name": "alice-1"},
                             {"id": 2, "name": "alice-2"},
@@ -117,49 +122,37 @@ class WebAppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("缺少必填字段", response.data.decode("utf-8"))
 
-    def test_compare_result_and_download_endpoints(self) -> None:
+    def test_compare_result_page(self) -> None:
         form_data = self._valid_form_data()
         response = self.client.post("/compare", data=form_data)
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
         self.assertIn("对比结果", body)
-        self.assertIn("原始查询结果（可折叠）", body)
-        self.assertIn("<details", body)
-        self.assertIn("当前第 1 / 1 页", body)
-        self.assertIn("fake_report.json", body)
+        self.assertIn("表结构差异", body)
+        self.assertIn("源端表结构", body)
+        self.assertIn("目标端表结构", body)
+        self.assertIn("源端数据（表格）", body)
+        self.assertIn("目标端数据（表格）", body)
+        self.assertIn("<table", body)
+        self.assertIn("共 3 行，当前第 1 / 1 页", body)
         self.assertIsNotNone(self.last_config)
         self.assertEqual(self.last_config.max_report_samples, 20)
 
-        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
-        self.assertIsNotNone(report_id_match)
-        report_id = report_id_match.group(1)
-
-        json_response = self.client.get(f"/download/{report_id}/json")
-        self.assertEqual(json_response.status_code, 200)
-        self.assertEqual(json_response.mimetype, "application/json")
-        json_response.close()
-
-        markdown_response = self.client.get(f"/download/{report_id}/markdown")
-        self.assertEqual(markdown_response.status_code, 200)
-        self.assertEqual(markdown_response.mimetype, "text/markdown")
-        markdown_response.close()
-
-        unknown_response = self.client.get(f"/download/{report_id}/invalid")
-        self.assertEqual(unknown_response.status_code, 400)
+    def test_download_route_removed(self) -> None:
+        response = self.client.get("/download/any/json")
+        self.assertEqual(response.status_code, 404)
 
     def test_result_endpoint_supports_raw_data_pagination(self) -> None:
         response = self.client.post("/compare", data=self._valid_form_data())
         self.assertEqual(response.status_code, 200)
-        body = response.data.decode("utf-8")
-        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
-        self.assertIsNotNone(report_id_match)
-        report_id = report_id_match.group(1)
+        report_registry = self.app.config["REPORT_REGISTRY"]
+        report_id = next(iter(report_registry))
 
         page_response = self.client.get(f"/result/{report_id}?source_page=2&target_page=3&page_size=1")
         self.assertEqual(page_response.status_code, 200)
         page_body = page_response.data.decode("utf-8")
-        self.assertIn("源端原始数据（共 3 行，当前第 2 / 3 页）", page_body)
-        self.assertIn("目标端原始数据（共 3 行，当前第 3 / 3 页）", page_body)
+        self.assertIn("共 3 行，当前第 2 / 3 页", page_body)
+        self.assertIn("共 3 行，当前第 3 / 3 页", page_body)
         self.assertIn("Alice-2", page_body)
         self.assertIn("alice-3", page_body)
 
