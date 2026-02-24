@@ -17,6 +17,75 @@
 
 ---
 
+## 平台架构图
+
+```mermaid
+flowchart LR
+    U[用户<br/>浏览器 / CLI]
+
+    subgraph APP[迁移对比平台]
+      WEB[Web 层<br/>migration_compare.web]
+      CLI[CLI 层<br/>migration_compare.cli]
+      SERVICE[对比编排层<br/>migration_compare.service]
+      MYSQL_CLIENT[数据采集层<br/>migration_compare.mysql_client<br/>PyMySQL]
+      COMPARATOR[差异引擎<br/>migration_compare.comparator]
+      REPORT[报告生成层<br/>migration_compare.report]
+      STORE[报告文件<br/>reports/*.json<br/>reports/*.md]
+      MEM[内存报告注册表<br/>REPORT_REGISTRY]
+    end
+
+    SRC[(源端 MySQL)]
+    TGT[(目标端 MySQL)]
+
+    U -->|填写连接信息并发起对比| WEB
+    U -->|命令行参数/配置| CLI
+    WEB --> SERVICE
+    CLI --> SERVICE
+
+    SERVICE --> MYSQL_CLIENT
+    MYSQL_CLIENT -->|读取表结构+数据| SRC
+    MYSQL_CLIENT -->|读取表结构+数据| TGT
+
+    SERVICE --> COMPARATOR
+    COMPARATOR -->|结构差异+数据差异<br/>大小写敏感| SERVICE
+
+    SERVICE -->|报告对象（含源/目标原始结构与原始数据）| WEB
+    SERVICE -->|报告对象（含源/目标原始结构与原始数据）| REPORT
+    REPORT --> STORE
+    WEB -->|缓存报告元信息/内存对象| MEM
+    U -->|下载 JSON/Markdown 报告| WEB
+    WEB --> STORE
+    U -->|结果页查看原始数据分页| WEB
+```
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Web as Web界面
+    participant Service as run_comparison
+    participant Reader as MySQLSnapshotReader(PyMySQL)
+    participant Src as 源端MySQL
+    participant Tgt as 目标端MySQL
+    participant Comparator as compare_tables
+    participant Report as write_report
+
+    User->>Web: 提交源/目标连接与库表信息
+    Web->>Service: 构建CompareConfig并执行对比
+    Service->>Reader: 读取源端快照
+    Reader->>Src: 查询列定义/主键/数据
+    Src-->>Reader: 源端原始结构+原始数据
+    Service->>Reader: 读取目标端快照
+    Reader->>Tgt: 查询列定义/主键/数据
+    Tgt-->>Reader: 目标端原始结构+原始数据
+    Service->>Comparator: 结构+数据对比
+    Comparator-->>Service: 差异结果
+    Service->>Report: 生成中文JSON/Markdown报告
+    Report-->>Web: 报告路径与摘要
+    Web-->>User: 展示对比结果（含原始数据分页）
+```
+
+---
+
 ## 安装
 
 ```bash
