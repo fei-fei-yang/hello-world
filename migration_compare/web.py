@@ -223,6 +223,8 @@ def _build_paginated_report_view(
     source_page_rows, source_pagination = _paginate_rows(source_rows, source_page, page_size)
     target_page_rows, target_pagination = _paginate_rows(target_rows, target_page, page_size)
 
+    source["column_names"] = _extract_column_names(source)
+    target["column_names"] = _extract_column_names(target)
     source["rows_page"] = source_page_rows
     target["rows_page"] = target_page_rows
     return report_view, source_pagination, target_pagination
@@ -249,6 +251,25 @@ def _paginate_rows(rows: Any, page: int, page_size: int) -> tuple[list[Any], dic
         "prev_page": current_page - 1,
         "next_page": current_page + 1,
     }
+
+
+def _extract_column_names(raw_table: dict[str, Any]) -> list[str]:
+    columns = raw_table.get("columns", [])
+    if isinstance(columns, list):
+        names = [
+            str(column.get("name"))
+            for column in columns
+            if isinstance(column, dict) and column.get("name") is not None
+        ]
+        if names:
+            return names
+
+    rows = raw_table.get("rows", [])
+    if isinstance(rows, list) and rows:
+        first_row = rows[0]
+        if isinstance(first_row, dict):
+            return [str(key) for key in first_row.keys()]
+    return []
 
 
 def _decorate_report_for_web(report: dict[str, Any]) -> None:

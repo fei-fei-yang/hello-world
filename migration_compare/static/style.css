@@ -148,6 +148,20 @@ th {
   background: #f0f4f8;
 }
 
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.compact-table th,
+.compact-table td {
+  font-size: 13px;
+}
+
+.compact-table td {
+  word-break: break-word;
+}
+
 pre {
   margin: 6px 0 14px 0;
   background: #102a43;
@@ -155,29 +169,6 @@ pre {
   border-radius: 8px;
   padding: 10px;
   overflow-x: auto;
-}
-
-.collapsible {
-  border: 1px solid #d9e2ec;
-  border-radius: 8px;
-  background: #f8fafc;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-}
-
-.collapsible > summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: #334e68;
-  outline: none;
-}
-
-.collapsible[open] {
-  background: #ffffff;
-}
-
-.collapsible pre {
-  margin-top: 10px;
 }
 
 .pagination-form {

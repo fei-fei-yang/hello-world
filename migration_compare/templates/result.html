@@ -10,6 +10,10 @@
     {% set raw_query = report.get('raw_query_result', {}) %}
     {% set raw_source = raw_query.get('source', {}) %}
     {% set raw_target = raw_query.get('target', {}) %}
+    {% set source_columns = raw_source.get('columns', []) %}
+    {% set target_columns = raw_target.get('columns', []) %}
+    {% set source_column_names = raw_source.get('column_names', []) %}
+    {% set target_column_names = raw_target.get('column_names', []) %}
     <main class="container">
       <h1>对比结果</h1>
       <p class="subtitle">已完成结构与数据对比（大小写敏感）。</p>
@@ -77,6 +81,70 @@
         {% else %}
         <p>未发现表结构定义差异。</p>
         {% endif %}
+
+        <h3>源端表结构</h3>
+        {% if source_columns %}
+        <div class="table-wrapper">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>列名</th>
+                <th>类型</th>
+                <th>可空</th>
+                <th>默认值</th>
+                <th>键</th>
+                <th>额外属性</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for col in source_columns %}
+              <tr>
+                <td>{{ col.get('name') }}</td>
+                <td>{{ col.get('column_type') or col.get('data_type') }}</td>
+                <td>{{ col.get('is_nullable') }}</td>
+                <td>{{ col.get('column_default') }}</td>
+                <td>{{ col.get('column_key') }}</td>
+                <td>{{ col.get('extra') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p>源端未查询到表结构信息。</p>
+        {% endif %}
+
+        <h3>目标端表结构</h3>
+        {% if target_columns %}
+        <div class="table-wrapper">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>列名</th>
+                <th>类型</th>
+                <th>可空</th>
+                <th>默认值</th>
+                <th>键</th>
+                <th>额外属性</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for col in target_columns %}
+              <tr>
+                <td>{{ col.get('name') }}</td>
+                <td>{{ col.get('column_type') or col.get('data_type') }}</td>
+                <td>{{ col.get('is_nullable') }}</td>
+                <td>{{ col.get('column_default') }}</td>
+                <td>{{ col.get('column_key') }}</td>
+                <td>{{ col.get('extra') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p>目标端未查询到表结构信息。</p>
+        {% endif %}
       </section>
 
       <section class="panel">
@@ -96,18 +164,6 @@
           <li>说明：{{ report.comparison.data.note_zh or report.comparison.data.note }}</li>
         </ul>
 
-        <h3>目标端缺失行样例</h3>
-        <pre>{{ report.comparison.data.missing_rows_in_target_samples }}</pre>
-
-        <h3>目标端多出行样例</h3>
-        <pre>{{ report.comparison.data.extra_rows_in_target_samples }}</pre>
-
-        <h3>行内容差异样例</h3>
-        <pre>{{ report.comparison.data.changed_rows_samples }}</pre>
-      </section>
-
-      <section class="panel">
-        <h2>原始查询结果（可折叠）</h2>
         <form method="get" action="{{ url_for('result_page', report_id=report_id) }}" class="pagination-form">
           <input type="hidden" name="source_page" value="1" />
           <input type="hidden" name="target_page" value="1" />
@@ -118,72 +174,105 @@
           <button type="submit" class="btn-secondary">应用分页</button>
         </form>
 
-        <details class="collapsible">
-          <summary>源端原始表结构（{{ raw_source.get('columns', []) | length }} 列）</summary>
-          <pre>{{ raw_source.get('columns', []) }}</pre>
-        </details>
-        <details class="collapsible">
-          <summary>
-            源端原始数据（共 {{ source_pagination.total_rows }} 行，当前第 {{ source_pagination.current_page }} / {{ source_pagination.total_pages }} 页）
-          </summary>
-          <div class="pager">
-            {% if source_pagination.has_prev %}
-            <a
-              class="pager-link"
-              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.prev_page, target_page=target_pagination.current_page, page_size=page_size) }}"
-              >上一页</a
-            >
-            {% else %}
-            <span class="pager-disabled">上一页</span>
-            {% endif %}
+        <h3>源端数据（表格）</h3>
+        <div class="pager">
+          {% if source_pagination.has_prev %}
+          <a
+            class="pager-link"
+            href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.prev_page, target_page=target_pagination.current_page, page_size=page_size) }}"
+            >上一页</a
+          >
+          {% else %}
+          <span class="pager-disabled">上一页</span>
+          {% endif %}
+          <span class="pager-info"
+            >共 {{ source_pagination.total_rows }} 行，当前第 {{ source_pagination.current_page }} / {{ source_pagination.total_pages }} 页，显示
+            {{ source_pagination.start_row }} - {{ source_pagination.end_row }}</span
+          >
+          {% if source_pagination.has_next %}
+          <a
+            class="pager-link"
+            href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.next_page, target_page=target_pagination.current_page, page_size=page_size) }}"
+            >下一页</a
+          >
+          {% else %}
+          <span class="pager-disabled">下一页</span>
+          {% endif %}
+        </div>
+        {% if source_column_names %}
+        <div class="table-wrapper">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                {% for column_name in source_column_names %}
+                <th>{{ column_name }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in raw_source.get('rows_page', []) %}
+              <tr>
+                {% for column_name in source_column_names %}
+                <td>{{ row.get(column_name) }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p>源端无可展示的数据列。</p>
+        {% endif %}
 
-            <span class="pager-info">显示 {{ source_pagination.start_row }} - {{ source_pagination.end_row }}</span>
-
-            {% if source_pagination.has_next %}
-            <a
-              class="pager-link"
-              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.next_page, target_page=target_pagination.current_page, page_size=page_size) }}"
-              >下一页</a
-            >
-            {% else %}
-            <span class="pager-disabled">下一页</span>
-            {% endif %}
-          </div>
-          <pre>{{ raw_source.get('rows_page', []) }}</pre>
-        </details>
-        <details class="collapsible">
-          <summary>目标端原始表结构（{{ raw_target.get('columns', []) | length }} 列）</summary>
-          <pre>{{ raw_target.get('columns', []) }}</pre>
-        </details>
-        <details class="collapsible">
-          <summary>
-            目标端原始数据（共 {{ target_pagination.total_rows }} 行，当前第 {{ target_pagination.current_page }} / {{ target_pagination.total_pages }} 页）
-          </summary>
-          <div class="pager">
-            {% if target_pagination.has_prev %}
-            <a
-              class="pager-link"
-              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.prev_page, page_size=page_size) }}"
-              >上一页</a
-            >
-            {% else %}
-            <span class="pager-disabled">上一页</span>
-            {% endif %}
-
-            <span class="pager-info">显示 {{ target_pagination.start_row }} - {{ target_pagination.end_row }}</span>
-
-            {% if target_pagination.has_next %}
-            <a
-              class="pager-link"
-              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.next_page, page_size=page_size) }}"
-              >下一页</a
-            >
-            {% else %}
-            <span class="pager-disabled">下一页</span>
-            {% endif %}
-          </div>
-          <pre>{{ raw_target.get('rows_page', []) }}</pre>
-        </details>
+        <h3>目标端数据（表格）</h3>
+        <div class="pager">
+          {% if target_pagination.has_prev %}
+          <a
+            class="pager-link"
+            href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.prev_page, page_size=page_size) }}"
+            >上一页</a
+          >
+          {% else %}
+          <span class="pager-disabled">上一页</span>
+          {% endif %}
+          <span class="pager-info"
+            >共 {{ target_pagination.total_rows }} 行，当前第 {{ target_pagination.current_page }} / {{ target_pagination.total_pages }} 页，显示
+            {{ target_pagination.start_row }} - {{ target_pagination.end_row }}</span
+          >
+          {% if target_pagination.has_next %}
+          <a
+            class="pager-link"
+            href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.next_page, page_size=page_size) }}"
+            >下一页</a
+          >
+          {% else %}
+          <span class="pager-disabled">下一页</span>
+          {% endif %}
+        </div>
+        {% if target_column_names %}
+        <div class="table-wrapper">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                {% for column_name in target_column_names %}
+                <th>{{ column_name }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in raw_target.get('rows_page', []) %}
+              <tr>
+                {% for column_name in target_column_names %}
+                <td>{{ row.get(column_name) }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p>目标端无可展示的数据列。</p>
+        {% endif %}
       </section>
     </main>
   </body>
