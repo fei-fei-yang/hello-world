@@ -68,7 +68,10 @@ class WebAppTestCase(unittest.TestCase):
                         "database": "db_src",
                         "table": "orders",
                         "primary_key": ["id"],
-                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "columns": [
+                            {"name": "id", "column_type": "bigint"},
+                            {"name": "name", "column_type": "varchar(64)"},
+                        ],
                         "rows": [
                             {"id": 1, "name": "Alice-1"},
                             {"id": 2, "name": "Alice-2"},
@@ -79,7 +82,10 @@ class WebAppTestCase(unittest.TestCase):
                         "database": "db_tgt",
                         "table": "orders",
                         "primary_key": ["id"],
-                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "columns": [
+                            {"name": "id", "column_type": "bigint"},
+                            {"name": "name", "column_type": "varchar(64)"},
+                        ],
                         "rows": [
                             {"id": 1, "name": "alice-1"},
                             {"id": 2, "name": "alice-2"},
