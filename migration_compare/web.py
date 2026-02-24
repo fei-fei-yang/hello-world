@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import re
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
 from flask import Flask, Response, render_template, request, send_file
+from pymysql import err as pymysql_err
 
 from .models import CompareConfig, DbConnection, EndpointConfig, TableIdentifier
 from .report import write_report
@@ -16,6 +20,8 @@ from .service import run_comparison
 
 CompareRunner = Callable[[CompareConfig], dict[str, Any]]
 ReportWriter = Callable[[dict[str, Any], Path], tuple[Path, Path]]
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 500
 
 
 @dataclass(frozen=True)
@@ -24,6 +30,7 @@ class StoredReport:
     created_at: str
     json_path: Path
     markdown_path: Path
+    report: dict[str, Any]
 
 
 def create_app(
@@ -35,6 +42,29 @@ def create_app(
     app.config["REPORT_REGISTRY"] = {}
     app.config["COMPARE_RUNNER"] = compare_runner or run_comparison
     app.config["REPORT_WRITER"] = report_writer or write_report
+
+    def render_result_page(
+        stored: StoredReport,
+        source_page: int,
+        target_page: int,
+        page_size: int,
+    ) -> str:
+        report_view, source_pagination, target_pagination = _build_paginated_report_view(
+            stored.report,
+            source_page=source_page,
+            target_page=target_page,
+            page_size=page_size,
+        )
+        return render_template(
+            "result.html",
+            report=report_view,
+            report_id=stored.report_id,
+            json_name=stored.json_path.name,
+            markdown_name=stored.markdown_path.name,
+            source_pagination=source_pagination,
+            target_pagination=target_pagination,
+            page_size=page_size,
+        )
 
     @app.get("/")
     def index() -> str:
@@ -50,31 +80,54 @@ def create_app(
 
         try:
             report = app.config["COMPARE_RUNNER"](config)
+            _decorate_report_for_web(report)
             json_path, markdown_path = app.config["REPORT_WRITER"](report, config.output_dir)
         except Exception as exc:  # noqa: BLE001 - UI endpoint needs a single error response
-            return render_template("index.html", values=values, error_message=f"Execution failed: {exc}"), 500
+            return render_template(
+                "index.html",
+                values=values,
+                error_message=_to_chinese_error_message(exc),
+            ), 500
 
         report_id = uuid4().hex
-        app.config["REPORT_REGISTRY"][report_id] = StoredReport(
+        stored_report = StoredReport(
             report_id=report_id,
             created_at=datetime.now(timezone.utc).isoformat(),
             json_path=json_path,
             markdown_path=markdown_path,
+            report=report,
+        )
+        app.config["REPORT_REGISTRY"][report_id] = stored_report
+
+        return render_result_page(
+            stored=stored_report,
+            source_page=1,
+            target_page=1,
+            page_size=DEFAULT_PAGE_SIZE,
         )
 
-        return render_template(
-            "result.html",
-            report=report,
-            report_id=report_id,
-            json_name=json_path.name,
-            markdown_name=markdown_path.name,
+    @app.get("/result/<report_id>")
+    def result_page(report_id: str) -> Response | str:
+        stored = app.config["REPORT_REGISTRY"].get(report_id)
+        if stored is None:
+            return Response("未知报告 ID。", status=404)
+
+        source_page = _safe_positive_int(request.args.get("source_page"), default=1)
+        target_page = _safe_positive_int(request.args.get("target_page"), default=1)
+        page_size = _safe_positive_int(request.args.get("page_size"), default=DEFAULT_PAGE_SIZE)
+        page_size = min(page_size, MAX_PAGE_SIZE)
+        return render_result_page(
+            stored=stored,
+            source_page=source_page,
+            target_page=target_page,
+            page_size=page_size,
         )
 
     @app.get("/download/<report_id>/<format_name>")
     def download(report_id: str, format_name: str) -> Response:
         stored = app.config["REPORT_REGISTRY"].get(report_id)
         if stored is None:
-            return Response("Unknown report ID.", status=404)
+            return Response("未知报告 ID。", status=404)
 
         if format_name == "json":
             path = stored.json_path
@@ -83,10 +136,10 @@ def create_app(
             path = stored.markdown_path
             mimetype = "text/markdown"
         else:
-            return Response("Unsupported format.", status=400)
+            return Response("不支持的下载格式。", status=400)
 
         if not path.exists():
-            return Response("Report file no longer exists.", status=404)
+            return Response("报告文件不存在或已被清理。", status=404)
         return send_file(path, as_attachment=True, download_name=path.name, mimetype=mimetype)
 
     return app
@@ -95,7 +148,7 @@ def create_app(
 def _build_compare_config(values: dict[str, str]) -> CompareConfig:
     max_samples = _parse_int(values["max_samples"], "max_samples")
     if max_samples <= 0:
-        raise ValueError("max_samples must be greater than 0.")
+        raise ValueError("样例数量上限必须大于 0。")
 
     source = _build_endpoint(values, "source")
     target = _build_endpoint(values, "target")
@@ -112,7 +165,7 @@ def _build_endpoint(values: dict[str, str], prefix: str) -> EndpointConfig:
 
     port = _parse_int(values[f"{prefix}_port"], f"{prefix}_port")
     if port <= 0 or port > 65535:
-        raise ValueError(f"{prefix}_port must be between 1 and 65535.")
+        raise ValueError(f"{prefix}_port 必须在 1 到 65535 之间。")
 
     missing = []
     for name, value in (
@@ -125,7 +178,7 @@ def _build_endpoint(values: dict[str, str], prefix: str) -> EndpointConfig:
         if value == "":
             missing.append(name)
     if missing:
-        raise ValueError(f"Missing required fields: {', '.join(missing)}.")
+        raise ValueError(f"缺少必填字段：{', '.join(missing)}。")
 
     return EndpointConfig(
         connection=DbConnection(host=host, port=port, user=user, password=password),
@@ -137,7 +190,7 @@ def _parse_int(raw_value: str, field_name: str) -> int:
     try:
         return int(raw_value)
     except ValueError as exc:
-        raise ValueError(f"{field_name} must be an integer.") from exc
+        raise ValueError(f"{field_name} 必须是整数。") from exc
 
 
 def _default_form_values() -> dict[str, str]:
@@ -164,6 +217,135 @@ def _collect_form_values(form: Any) -> dict[str, str]:
     for key in values:
         values[key] = str(form.get(key, values[key]))
     return values
+
+
+def _safe_positive_int(raw_value: str | None, default: int) -> int:
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+        if value <= 0:
+            return default
+        return value
+    except ValueError:
+        return default
+
+
+def _build_paginated_report_view(
+    report: dict[str, Any],
+    source_page: int,
+    target_page: int,
+    page_size: int,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    report_view = deepcopy(report)
+    raw_query = report_view.setdefault("raw_query_result", {})
+    source = raw_query.setdefault("source", {})
+    target = raw_query.setdefault("target", {})
+
+    source_rows = source.get("rows", [])
+    target_rows = target.get("rows", [])
+
+    source_page_rows, source_pagination = _paginate_rows(source_rows, source_page, page_size)
+    target_page_rows, target_pagination = _paginate_rows(target_rows, target_page, page_size)
+
+    source["rows_page"] = source_page_rows
+    target["rows_page"] = target_page_rows
+    return report_view, source_pagination, target_pagination
+
+
+def _paginate_rows(rows: Any, page: int, page_size: int) -> tuple[list[Any], dict[str, Any]]:
+    row_list = rows if isinstance(rows, list) else []
+    total_rows = len(row_list)
+    total_pages = max(1, math.ceil(total_rows / page_size))
+    current_page = min(max(1, page), total_pages)
+    start_idx = (current_page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_rows)
+    page_rows = row_list[start_idx:end_idx]
+
+    return page_rows, {
+        "current_page": current_page,
+        "total_pages": total_pages,
+        "page_size": page_size,
+        "total_rows": total_rows,
+        "start_row": 0 if total_rows == 0 else start_idx + 1,
+        "end_row": end_idx,
+        "has_prev": current_page > 1,
+        "has_next": current_page < total_pages,
+        "prev_page": current_page - 1,
+        "next_page": current_page + 1,
+    }
+
+
+def _decorate_report_for_web(report: dict[str, Any]) -> None:
+    comparison = report.get("comparison", {})
+    data = comparison.get("data", {})
+    if not isinstance(data, dict):
+        return
+
+    mode = str(data.get("mode", ""))
+    note = str(data.get("note", ""))
+    data["mode_zh"] = _translate_compare_mode(mode)
+    data["note_zh"] = _translate_compare_note(note)
+
+
+def _translate_compare_mode(mode: str) -> str:
+    mapping = {
+        "primary_key": "按主键逐行对比",
+        "row_multiset": "按行多重集对比",
+        "unavailable": "无法执行数据对比",
+    }
+    return mapping.get(mode, mode)
+
+
+def _translate_compare_note(note: str) -> str:
+    mapping = {
+        "Compared by aligned primary key columns. String comparison is case-sensitive.": "已按对齐主键逐行对比，字符串比较区分大小写。",
+        "Primary keys are not aligned, so comparison falls back to row multiset mode. String comparison is case-sensitive.": "源端与目标端主键不一致，已回退为按行多重集对比，字符串比较区分大小写。",
+        "No common columns found between source and target (case-sensitive comparison).": "源端与目标端没有同名列（大小写敏感），无法执行数据对比。",
+    }
+    return mapping.get(note, note)
+
+
+def _to_chinese_error_message(exc: Exception) -> str:
+    if isinstance(exc, pymysql_err.OperationalError):
+        code = exc.args[0] if exc.args else None
+        detail = str(exc.args[1]) if len(exc.args) > 1 else str(exc)
+        if code == 1045:
+            matched = re.search(
+                r"Access denied for user '([^']+)'@'([^']+)' \(using password: (YES|NO)\)",
+                detail,
+            )
+            if matched:
+                user, client_host, using_password = matched.groups()
+                if using_password == "NO":
+                    return (
+                        "执行失败：密码错误（未提供密码）。"
+                        f" 当前用户：{user}，来源主机：{client_host}。"
+                    )
+                if user == "root" and client_host not in {"localhost", "127.0.0.1", "::1"}:
+                    return (
+                        "执行失败：无远程权限。"
+                        f" 用户 {user} 来自 {client_host} 的远程登录被拒绝，"
+                        "请为该来源主机授权或改用专用迁移账号。"
+                    )
+                return (
+                    "执行失败：密码错误或账号权限不足。"
+                    f" 用户 {user} 来自 {client_host} 的认证失败，请检查用户名/密码和账号授权。"
+                )
+            return "执行失败：认证失败（1045），请检查用户名、密码和账号授权。"
+
+        if code == 1130:
+            return (
+                "执行失败：主机未授权（1130）。"
+                "当前客户端主机不在 MySQL 允许列表，请在数据库侧放通来源 IP。"
+            )
+
+        if code == 2003:
+            return "执行失败：无法连接数据库（2003），请检查 IP、端口、网络连通性和防火墙策略。"
+
+        return f"执行失败：数据库错误（{code}），详细信息：{detail}"
+
+    return f"执行失败：{exc}"
 
 
 def _build_web_parser() -> argparse.ArgumentParser:

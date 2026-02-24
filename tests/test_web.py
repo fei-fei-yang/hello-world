@@ -9,6 +9,7 @@ from typing import Any
 
 from migration_compare.models import CompareConfig
 from migration_compare.web import create_app
+from pymysql import err as pymysql_err
 
 
 class WebAppTestCase(unittest.TestCase):
@@ -63,6 +64,30 @@ class WebAppTestCase(unittest.TestCase):
                         "changed_rows_samples": [{"key": {"id": 1}}],
                     },
                 },
+                "raw_query_result": {
+                    "source": {
+                        "database": "db_src",
+                        "table": "orders",
+                        "primary_key": ["id"],
+                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "rows": [
+                            {"id": 1, "name": "Alice-1"},
+                            {"id": 2, "name": "Alice-2"},
+                            {"id": 3, "name": "Alice-3"},
+                        ],
+                    },
+                    "target": {
+                        "database": "db_tgt",
+                        "table": "orders",
+                        "primary_key": ["id"],
+                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "rows": [
+                            {"id": 1, "name": "alice-1"},
+                            {"id": 2, "name": "alice-2"},
+                            {"id": 3, "name": "alice-3"},
+                        ],
+                    },
+                },
             }
 
         def fake_report_writer(report: dict[str, Any], output_dir: Path) -> tuple[Path, Path]:
@@ -84,35 +109,23 @@ class WebAppTestCase(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
-        self.assertIn("MySQL Migration Compare", body)
-        self.assertIn("Run Comparison", body)
+        self.assertIn("MySQL 迁移对比平台", body)
+        self.assertIn("开始对比", body)
 
     def test_compare_validation_error_for_missing_fields(self) -> None:
         response = self.client.post("/compare", data={"source_host": ""})
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Missing required fields", response.data.decode("utf-8"))
+        self.assertIn("缺少必填字段", response.data.decode("utf-8"))
 
     def test_compare_result_and_download_endpoints(self) -> None:
-        form_data = {
-            "source_host": "10.0.0.1",
-            "source_port": "3306",
-            "source_user": "src_user",
-            "source_password": "src_pass",
-            "source_db": "db_src",
-            "source_table": "orders",
-            "target_host": "10.0.0.2",
-            "target_port": "3306",
-            "target_user": "tgt_user",
-            "target_password": "tgt_pass",
-            "target_db": "db_tgt",
-            "target_table": "orders",
-            "output_dir": str(self.base_output_dir / "reports"),
-            "max_samples": "20",
-        }
+        form_data = self._valid_form_data()
         response = self.client.post("/compare", data=form_data)
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
-        self.assertIn("Comparison Result", body)
+        self.assertIn("对比结果", body)
+        self.assertIn("原始查询结果（可折叠）", body)
+        self.assertIn("<details", body)
+        self.assertIn("当前第 1 / 1 页", body)
         self.assertIn("fake_report.json", body)
         self.assertIsNotNone(self.last_config)
         self.assertEqual(self.last_config.max_report_samples, 20)
@@ -133,6 +146,76 @@ class WebAppTestCase(unittest.TestCase):
 
         unknown_response = self.client.get(f"/download/{report_id}/invalid")
         self.assertEqual(unknown_response.status_code, 400)
+
+    def test_result_endpoint_supports_raw_data_pagination(self) -> None:
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 200)
+        body = response.data.decode("utf-8")
+        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
+        self.assertIsNotNone(report_id_match)
+        report_id = report_id_match.group(1)
+
+        page_response = self.client.get(f"/result/{report_id}?source_page=2&target_page=3&page_size=1")
+        self.assertEqual(page_response.status_code, 200)
+        page_body = page_response.data.decode("utf-8")
+        self.assertIn("源端原始数据（共 3 行，当前第 2 / 3 页）", page_body)
+        self.assertIn("目标端原始数据（共 3 行，当前第 3 / 3 页）", page_body)
+        self.assertIn("Alice-2", page_body)
+        self.assertIn("alice-3", page_body)
+
+    def test_compare_error_message_for_remote_root_denied(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1045,
+                "Access denied for user 'root'@'10.182.112.138' (using password: YES)",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("无远程权限", response.data.decode("utf-8"))
+
+    def test_compare_error_message_for_host_not_allowed(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1130,
+                "Host '10.182.112.138' is not allowed to connect to this MySQL server",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("主机未授权", response.data.decode("utf-8"))
+
+    def test_compare_error_message_for_wrong_password(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1045,
+                "Access denied for user 'cmp_user'@'10.182.112.138' (using password: NO)",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("密码错误", response.data.decode("utf-8"))
+
+    def _valid_form_data(self) -> dict[str, str]:
+        return {
+            "source_host": "10.0.0.1",
+            "source_port": "3306",
+            "source_user": "src_user",
+            "source_password": "src_pass",
+            "source_db": "db_src",
+            "source_table": "orders",
+            "target_host": "10.0.0.2",
+            "target_port": "3306",
+            "target_user": "tgt_user",
+            "target_password": "tgt_pass",
+            "target_db": "db_tgt",
+            "target_table": "orders",
+            "output_dir": str(self.base_output_dir / "reports"),
+            "max_samples": "20",
+        }
 
 
 if __name__ == "__main__":

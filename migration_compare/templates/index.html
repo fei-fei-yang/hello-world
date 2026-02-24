@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MySQL Migration Compare</title>
+    <title>MySQL 迁移对比平台</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   </head>
   <body>
     <main class="container">
-      <h1>MySQL Migration Compare</h1>
+      <h1>MySQL 迁移对比平台</h1>
       <p class="subtitle">
-        Fill in source/target connection details, run comparison, and inspect schema/data differences.
+        请填写源端与目标端连接信息，执行比对并在页面查看结构与数据差异（大小写敏感）。
       </p>
 
       {% if error_message %}
@@ -20,38 +20,38 @@
       <form method="post" action="/compare" class="panel">
         <section class="grid two-columns">
           <div>
-            <h2>Source</h2>
-            <label>Host<input name="source_host" value="{{ values.source_host }}" required /></label>
-            <label>Port<input name="source_port" type="number" value="{{ values.source_port }}" required /></label>
-            <label>User<input name="source_user" value="{{ values.source_user }}" required /></label>
-            <label>Password<input name="source_password" type="password" value="{{ values.source_password }}" required /></label>
-            <label>Database<input name="source_db" value="{{ values.source_db }}" required /></label>
-            <label>Table<input name="source_table" value="{{ values.source_table }}" required /></label>
+            <h2>源端</h2>
+            <label>主机（IP/域名）<input name="source_host" value="{{ values.source_host }}" required /></label>
+            <label>端口<input name="source_port" type="number" value="{{ values.source_port }}" required /></label>
+            <label>用户名<input name="source_user" value="{{ values.source_user }}" required /></label>
+            <label>密码<input name="source_password" type="password" value="{{ values.source_password }}" required /></label>
+            <label>数据库名<input name="source_db" value="{{ values.source_db }}" required /></label>
+            <label>表名<input name="source_table" value="{{ values.source_table }}" required /></label>
           </div>
 
           <div>
-            <h2>Target</h2>
-            <label>Host<input name="target_host" value="{{ values.target_host }}" required /></label>
-            <label>Port<input name="target_port" type="number" value="{{ values.target_port }}" required /></label>
-            <label>User<input name="target_user" value="{{ values.target_user }}" required /></label>
-            <label>Password<input name="target_password" type="password" value="{{ values.target_password }}" required /></label>
-            <label>Database<input name="target_db" value="{{ values.target_db }}" required /></label>
-            <label>Table<input name="target_table" value="{{ values.target_table }}" required /></label>
+            <h2>目标端</h2>
+            <label>主机（IP/域名）<input name="target_host" value="{{ values.target_host }}" required /></label>
+            <label>端口<input name="target_port" type="number" value="{{ values.target_port }}" required /></label>
+            <label>用户名<input name="target_user" value="{{ values.target_user }}" required /></label>
+            <label>密码<input name="target_password" type="password" value="{{ values.target_password }}" required /></label>
+            <label>数据库名<input name="target_db" value="{{ values.target_db }}" required /></label>
+            <label>表名<input name="target_table" value="{{ values.target_table }}" required /></label>
           </div>
         </section>
 
         <section class="grid two-columns">
           <label>
-            Output Directory
+            报告输出目录
             <input name="output_dir" value="{{ values.output_dir }}" />
           </label>
           <label>
-            Max Samples
+            每类差异样例上限
             <input name="max_samples" type="number" min="1" value="{{ values.max_samples }}" />
           </label>
         </section>
 
-        <button type="submit" class="btn-primary">Run Comparison</button>
+        <button type="submit" class="btn-primary">开始对比</button>
       </form>
     </main>
   </body>
