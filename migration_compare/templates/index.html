@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MySQL Migration Compare</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>MySQL Migration Compare</h1>
+      <p class="subtitle">
+        Fill in source/target connection details, run comparison, and inspect schema/data differences.
+      </p>
+
+      {% if error_message %}
+      <div class="alert error">{{ error_message }}</div>
+      {% endif %}
+
+      <form method="post" action="/compare" class="panel">
+        <section class="grid two-columns">
+          <div>
+            <h2>Source</h2>
+            <label>Host<input name="source_host" value="{{ values.source_host }}" required /></label>
+            <label>Port<input name="source_port" type="number" value="{{ values.source_port }}" required /></label>
+            <label>User<input name="source_user" value="{{ values.source_user }}" required /></label>
+            <label>Password<input name="source_password" type="password" value="{{ values.source_password }}" required /></label>
+            <label>Database<input name="source_db" value="{{ values.source_db }}" required /></label>
+            <label>Table<input name="source_table" value="{{ values.source_table }}" required /></label>
+          </div>
+
+          <div>
+            <h2>Target</h2>
+            <label>Host<input name="target_host" value="{{ values.target_host }}" required /></label>
+            <label>Port<input name="target_port" type="number" value="{{ values.target_port }}" required /></label>
+            <label>User<input name="target_user" value="{{ values.target_user }}" required /></label>
+            <label>Password<input name="target_password" type="password" value="{{ values.target_password }}" required /></label>
+            <label>Database<input name="target_db" value="{{ values.target_db }}" required /></label>
+            <label>Table<input name="target_table" value="{{ values.target_table }}" required /></label>
+          </div>
+        </section>
+
+        <section class="grid two-columns">
+          <label>
+            Output Directory
+            <input name="output_dir" value="{{ values.output_dir }}" />
+          </label>
+          <label>
+            Max Samples
+            <input name="max_samples" type="number" min="1" value="{{ values.max_samples }}" />
+          </label>
+        </section>
+
+        <button type="submit" class="btn-primary">Run Comparison</button>
+      </form>
+    </main>
+  </body>
+</html>

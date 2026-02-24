@@ -1,0 +1,20 @@
+{
+  "source": {
+    "host": "10.0.0.11",
+    "port": 3306,
+    "user": "source_user",
+    "password": "source_password",
+    "database": "source_db",
+    "table": "orders"
+  },
+  "target": {
+    "host": "10.0.0.12",
+    "port": 3306,
+    "user": "target_user",
+    "password": "target_password",
+    "database": "target_db",
+    "table": "orders"
+  },
+  "output_dir": "reports",
+  "max_samples": 100
+}
