@@ -70,14 +70,22 @@ class WebAppTestCase(unittest.TestCase):
                         "table": "orders",
                         "primary_key": ["id"],
                         "columns": [{"name": "id", "column_type": "bigint"}],
-                        "rows": [{"id": 1, "name": "Alice"}],
+                        "rows": [
+                            {"id": 1, "name": "Alice-1"},
+                            {"id": 2, "name": "Alice-2"},
+                            {"id": 3, "name": "Alice-3"},
+                        ],
                     },
                     "target": {
                         "database": "db_tgt",
                         "table": "orders",
                         "primary_key": ["id"],
                         "columns": [{"name": "id", "column_type": "bigint"}],
-                        "rows": [{"id": 1, "name": "alice"}],
+                        "rows": [
+                            {"id": 1, "name": "alice-1"},
+                            {"id": 2, "name": "alice-2"},
+                            {"id": 3, "name": "alice-3"},
+                        ],
                     },
                 },
             }
@@ -117,6 +125,7 @@ class WebAppTestCase(unittest.TestCase):
         self.assertIn("对比结果", body)
         self.assertIn("原始查询结果（可折叠）", body)
         self.assertIn("<details", body)
+        self.assertIn("当前第 1 / 1 页", body)
         self.assertIn("fake_report.json", body)
         self.assertIsNotNone(self.last_config)
         self.assertEqual(self.last_config.max_report_samples, 20)
@@ -137,6 +146,22 @@ class WebAppTestCase(unittest.TestCase):
 
         unknown_response = self.client.get(f"/download/{report_id}/invalid")
         self.assertEqual(unknown_response.status_code, 400)
+
+    def test_result_endpoint_supports_raw_data_pagination(self) -> None:
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 200)
+        body = response.data.decode("utf-8")
+        report_id_match = re.search(r"/download/([0-9a-f]+)/json", body)
+        self.assertIsNotNone(report_id_match)
+        report_id = report_id_match.group(1)
+
+        page_response = self.client.get(f"/result/{report_id}?source_page=2&target_page=3&page_size=1")
+        self.assertEqual(page_response.status_code, 200)
+        page_body = page_response.data.decode("utf-8")
+        self.assertIn("源端原始数据（共 3 行，当前第 2 / 3 页）", page_body)
+        self.assertIn("目标端原始数据（共 3 行，当前第 3 / 3 页）", page_body)
+        self.assertIn("Alice-2", page_body)
+        self.assertIn("alice-3", page_body)
 
     def test_compare_error_message_for_remote_root_denied(self) -> None:
         def raise_error(_: CompareConfig) -> dict[str, Any]:

@@ -110,21 +110,81 @@
 
       <section class="panel">
         <h2>原始查询结果（可折叠）</h2>
+        <form method="get" action="{{ url_for('result_page', report_id=report_id) }}" class="pagination-form">
+          <input type="hidden" name="source_page" value="1" />
+          <input type="hidden" name="target_page" value="1" />
+          <label>
+            每页显示行数
+            <input name="page_size" type="number" min="1" max="500" value="{{ page_size }}" />
+          </label>
+          <button type="submit" class="btn-secondary">应用分页</button>
+        </form>
+
         <details class="collapsible">
           <summary>源端原始表结构（{{ raw_source.get('columns', []) | length }} 列）</summary>
           <pre>{{ raw_source.get('columns', []) }}</pre>
         </details>
         <details class="collapsible">
-          <summary>源端原始数据（{{ raw_source.get('rows', []) | length }} 行）</summary>
-          <pre>{{ raw_source.get('rows', []) }}</pre>
+          <summary>
+            源端原始数据（共 {{ source_pagination.total_rows }} 行，当前第 {{ source_pagination.current_page }} / {{ source_pagination.total_pages }} 页）
+          </summary>
+          <div class="pager">
+            {% if source_pagination.has_prev %}
+            <a
+              class="pager-link"
+              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.prev_page, target_page=target_pagination.current_page, page_size=page_size) }}"
+              >上一页</a
+            >
+            {% else %}
+            <span class="pager-disabled">上一页</span>
+            {% endif %}
+
+            <span class="pager-info">显示 {{ source_pagination.start_row }} - {{ source_pagination.end_row }}</span>
+
+            {% if source_pagination.has_next %}
+            <a
+              class="pager-link"
+              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.next_page, target_page=target_pagination.current_page, page_size=page_size) }}"
+              >下一页</a
+            >
+            {% else %}
+            <span class="pager-disabled">下一页</span>
+            {% endif %}
+          </div>
+          <pre>{{ raw_source.get('rows_page', []) }}</pre>
         </details>
         <details class="collapsible">
           <summary>目标端原始表结构（{{ raw_target.get('columns', []) | length }} 列）</summary>
           <pre>{{ raw_target.get('columns', []) }}</pre>
         </details>
         <details class="collapsible">
-          <summary>目标端原始数据（{{ raw_target.get('rows', []) | length }} 行）</summary>
-          <pre>{{ raw_target.get('rows', []) }}</pre>
+          <summary>
+            目标端原始数据（共 {{ target_pagination.total_rows }} 行，当前第 {{ target_pagination.current_page }} / {{ target_pagination.total_pages }} 页）
+          </summary>
+          <div class="pager">
+            {% if target_pagination.has_prev %}
+            <a
+              class="pager-link"
+              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.prev_page, page_size=page_size) }}"
+              >上一页</a
+            >
+            {% else %}
+            <span class="pager-disabled">上一页</span>
+            {% endif %}
+
+            <span class="pager-info">显示 {{ target_pagination.start_row }} - {{ target_pagination.end_row }}</span>
+
+            {% if target_pagination.has_next %}
+            <a
+              class="pager-link"
+              href="{{ url_for('result_page', report_id=report_id, source_page=source_pagination.current_page, target_page=target_pagination.next_page, page_size=page_size) }}"
+              >下一页</a
+            >
+            {% else %}
+            <span class="pager-disabled">下一页</span>
+            {% endif %}
+          </div>
+          <pre>{{ raw_target.get('rows_page', []) }}</pre>
         </details>
       </section>
     </main>
