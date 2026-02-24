@@ -84,7 +84,12 @@ http://127.0.0.1:5000
 - 目标端：host、port、user、password、database、table
 - 报告目录、样例数量上限
 
-点击 **Run Comparison** 后可直接查看结构和数据差异，并下载 JSON/Markdown 报告。
+点击 **开始对比** 后可直接查看结构和数据差异，并下载 JSON/Markdown 报告。
+
+结果页支持：
+
+- 全中文显示
+- 源端/目标端原始结构与原始数据可折叠查看（避免大数据直接铺开）
 
 ---
 

@@ -64,6 +64,22 @@ class WebAppTestCase(unittest.TestCase):
                         "changed_rows_samples": [{"key": {"id": 1}}],
                     },
                 },
+                "raw_query_result": {
+                    "source": {
+                        "database": "db_src",
+                        "table": "orders",
+                        "primary_key": ["id"],
+                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "rows": [{"id": 1, "name": "Alice"}],
+                    },
+                    "target": {
+                        "database": "db_tgt",
+                        "table": "orders",
+                        "primary_key": ["id"],
+                        "columns": [{"name": "id", "column_type": "bigint"}],
+                        "rows": [{"id": 1, "name": "alice"}],
+                    },
+                },
             }
 
         def fake_report_writer(report: dict[str, Any], output_dir: Path) -> tuple[Path, Path]:
@@ -85,8 +101,8 @@ class WebAppTestCase(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
-        self.assertIn("MySQL Migration Compare", body)
-        self.assertIn("Run Comparison", body)
+        self.assertIn("MySQL 迁移对比平台", body)
+        self.assertIn("开始对比", body)
 
     def test_compare_validation_error_for_missing_fields(self) -> None:
         response = self.client.post("/compare", data={"source_host": ""})
@@ -98,7 +114,9 @@ class WebAppTestCase(unittest.TestCase):
         response = self.client.post("/compare", data=form_data)
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
-        self.assertIn("Comparison Result", body)
+        self.assertIn("对比结果", body)
+        self.assertIn("原始查询结果（可折叠）", body)
+        self.assertIn("<details", body)
         self.assertIn("fake_report.json", body)
         self.assertIsNotNone(self.last_config)
         self.assertEqual(self.last_config.max_report_samples, 20)

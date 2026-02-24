@@ -1,42 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Comparison Result</title>
+    <title>对比结果</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   </head>
   <body>
+    {% set raw_query = report.get('raw_query_result', {}) %}
+    {% set raw_source = raw_query.get('source', {}) %}
+    {% set raw_target = raw_query.get('target', {}) %}
     <main class="container">
-      <h1>Comparison Result</h1>
-      <p class="subtitle">Case-sensitive schema and data comparison report.</p>
+      <h1>对比结果</h1>
+      <p class="subtitle">已完成结构与数据对比（大小写敏感）。</p>
 
       <section class="panel summary">
         <div class="badge {{ 'ok' if report.summary.overall_match else 'bad' }}">
-          Overall: {{ 'MATCH' if report.summary.overall_match else 'MISMATCH' }}
+          总体：{{ '一致' if report.summary.overall_match else '不一致' }}
         </div>
         <ul class="metrics">
-          <li>Structure Match: <strong>{{ report.summary.structure_match }}</strong></li>
-          <li>Data Match: <strong>{{ report.summary.data_match }}</strong></li>
-          <li>Generated At: <strong>{{ report.generated_at }}</strong></li>
+          <li>表结构一致：<strong>{{ '是' if report.summary.structure_match else '否' }}</strong></li>
+          <li>数据一致：<strong>{{ '是' if report.summary.data_match else '否' }}</strong></li>
+          <li>生成时间：<strong>{{ report.generated_at }}</strong></li>
         </ul>
         <div class="buttons">
-          <a class="btn-secondary" href="/">New Comparison</a>
-          <a class="btn-secondary" href="/download/{{ report_id }}/json">Download {{ json_name }}</a>
-          <a class="btn-secondary" href="/download/{{ report_id }}/markdown">Download {{ markdown_name }}</a>
+          <a class="btn-secondary" href="/">重新对比</a>
+          <a class="btn-secondary" href="/download/{{ report_id }}/json">下载 {{ json_name }}</a>
+          <a class="btn-secondary" href="/download/{{ report_id }}/markdown">下载 {{ markdown_name }}</a>
         </div>
       </section>
 
       <section class="panel">
-        <h2>Endpoints</h2>
+        <h2>连接信息</h2>
         <div class="grid two-columns">
           <div>
-            <h3>Source</h3>
+            <h3>源端</h3>
             <p>{{ report.source.host }}:{{ report.source.port }}</p>
             <p>{{ report.source.database }}.{{ report.source.table }}</p>
           </div>
           <div>
-            <h3>Target</h3>
+            <h3>目标端</h3>
             <p>{{ report.target.host }}:{{ report.target.port }}</p>
             <p>{{ report.target.database }}.{{ report.target.table }}</p>
           </div>
@@ -44,18 +47,18 @@
       </section>
 
       <section class="panel">
-        <h2>Schema Differences</h2>
+        <h2>表结构差异</h2>
         <ul class="metrics">
-          <li>Missing in Target: <code>{{ report.comparison.structure.missing_columns_in_target }}</code></li>
-          <li>Missing in Source: <code>{{ report.comparison.structure.missing_columns_in_source }}</code></li>
-          <li>Column Order Match: <strong>{{ report.comparison.structure.column_order_match }}</strong></li>
+          <li>目标端缺失列：<code>{{ report.comparison.structure.missing_columns_in_target }}</code></li>
+          <li>源端缺失列：<code>{{ report.comparison.structure.missing_columns_in_source }}</code></li>
+          <li>列顺序一致：<strong>{{ '是' if report.comparison.structure.column_order_match else '否' }}</strong></li>
         </ul>
         {% if report.comparison.structure.column_definition_mismatches %}
         <table>
           <thead>
             <tr>
-              <th>Column</th>
-              <th>Differences</th>
+              <th>列名</th>
+              <th>差异</th>
             </tr>
           </thead>
           <tbody>
@@ -65,7 +68,7 @@
               <td>
                 <ul>
                   {% for field, diff in item.differences.items() %}
-                  <li>{{ field }}: source={{ diff.source }} | target={{ diff.target }}</li>
+                  <li>{{ field }}：源端={{ diff.source }} | 目标端={{ diff.target }}</li>
                   {% endfor %}
                 </ul>
               </td>
@@ -74,35 +77,55 @@
           </tbody>
         </table>
         {% else %}
-        <p>No schema definition mismatches.</p>
+        <p>未发现表结构定义差异。</p>
         {% endif %}
       </section>
 
       <section class="panel">
-        <h2>Data Differences</h2>
+        <h2>数据差异</h2>
         <ul class="metrics">
-          <li>Mode: <strong>{{ report.comparison.data.mode }}</strong></li>
-          <li>Compared Columns: <code>{{ report.comparison.data.compared_columns }}</code></li>
-          <li>Skipped Columns: <code>{{ report.comparison.data.skipped_columns }}</code></li>
-          <li>Key Columns: <code>{{ report.comparison.data.key_columns }}</code></li>
-          <li>Source Rows: <strong>{{ report.comparison.data.source_row_count }}</strong></li>
-          <li>Target Rows: <strong>{{ report.comparison.data.target_row_count }}</strong></li>
-          <li>Missing Rows in Target: <strong>{{ report.comparison.data.missing_rows_in_target_count }}</strong></li>
-          <li>Extra Rows in Target: <strong>{{ report.comparison.data.extra_rows_in_target_count }}</strong></li>
-          <li>Changed Rows: <strong>{{ report.comparison.data.changed_rows_count }}</strong></li>
-          <li>Duplicate Keys in Source: <strong>{{ report.comparison.data.duplicate_key_count_source }}</strong></li>
-          <li>Duplicate Keys in Target: <strong>{{ report.comparison.data.duplicate_key_count_target }}</strong></li>
-          <li>Note: {{ report.comparison.data.note }}</li>
+          <li>对比模式：<strong>{{ report.comparison.data.mode_zh or report.comparison.data.mode }}</strong></li>
+          <li>对比列：<code>{{ report.comparison.data.compared_columns }}</code></li>
+          <li>跳过列：<code>{{ report.comparison.data.skipped_columns }}</code></li>
+          <li>主键列：<code>{{ report.comparison.data.key_columns }}</code></li>
+          <li>源端行数：<strong>{{ report.comparison.data.source_row_count }}</strong></li>
+          <li>目标端行数：<strong>{{ report.comparison.data.target_row_count }}</strong></li>
+          <li>目标端缺失行：<strong>{{ report.comparison.data.missing_rows_in_target_count }}</strong></li>
+          <li>目标端多出行：<strong>{{ report.comparison.data.extra_rows_in_target_count }}</strong></li>
+          <li>行内容不一致：<strong>{{ report.comparison.data.changed_rows_count }}</strong></li>
+          <li>源端重复主键：<strong>{{ report.comparison.data.duplicate_key_count_source }}</strong></li>
+          <li>目标端重复主键：<strong>{{ report.comparison.data.duplicate_key_count_target }}</strong></li>
+          <li>说明：{{ report.comparison.data.note_zh or report.comparison.data.note }}</li>
         </ul>
 
-        <h3>Missing Rows Samples</h3>
+        <h3>目标端缺失行样例</h3>
         <pre>{{ report.comparison.data.missing_rows_in_target_samples }}</pre>
 
-        <h3>Extra Rows Samples</h3>
+        <h3>目标端多出行样例</h3>
         <pre>{{ report.comparison.data.extra_rows_in_target_samples }}</pre>
 
-        <h3>Changed Rows Samples</h3>
+        <h3>行内容差异样例</h3>
         <pre>{{ report.comparison.data.changed_rows_samples }}</pre>
+      </section>
+
+      <section class="panel">
+        <h2>原始查询结果（可折叠）</h2>
+        <details class="collapsible">
+          <summary>源端原始表结构（{{ raw_source.get('columns', []) | length }} 列）</summary>
+          <pre>{{ raw_source.get('columns', []) }}</pre>
+        </details>
+        <details class="collapsible">
+          <summary>源端原始数据（{{ raw_source.get('rows', []) | length }} 行）</summary>
+          <pre>{{ raw_source.get('rows', []) }}</pre>
+        </details>
+        <details class="collapsible">
+          <summary>目标端原始表结构（{{ raw_target.get('columns', []) | length }} 列）</summary>
+          <pre>{{ raw_target.get('columns', []) }}</pre>
+        </details>
+        <details class="collapsible">
+          <summary>目标端原始数据（{{ raw_target.get('rows', []) | length }} 行）</summary>
+          <pre>{{ raw_target.get('rows', []) }}</pre>
+        </details>
       </section>
     </main>
   </body>

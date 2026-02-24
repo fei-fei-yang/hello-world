@@ -52,6 +52,7 @@ def create_app(
 
         try:
             report = app.config["COMPARE_RUNNER"](config)
+            _decorate_report_for_web(report)
             json_path, markdown_path = app.config["REPORT_WRITER"](report, config.output_dir)
         except Exception as exc:  # noqa: BLE001 - UI endpoint needs a single error response
             return render_template(
@@ -170,6 +171,36 @@ def _collect_form_values(form: Any) -> dict[str, str]:
     for key in values:
         values[key] = str(form.get(key, values[key]))
     return values
+
+
+def _decorate_report_for_web(report: dict[str, Any]) -> None:
+    comparison = report.get("comparison", {})
+    data = comparison.get("data", {})
+    if not isinstance(data, dict):
+        return
+
+    mode = str(data.get("mode", ""))
+    note = str(data.get("note", ""))
+    data["mode_zh"] = _translate_compare_mode(mode)
+    data["note_zh"] = _translate_compare_note(note)
+
+
+def _translate_compare_mode(mode: str) -> str:
+    mapping = {
+        "primary_key": "按主键逐行对比",
+        "row_multiset": "按行多重集对比",
+        "unavailable": "无法执行数据对比",
+    }
+    return mapping.get(mode, mode)
+
+
+def _translate_compare_note(note: str) -> str:
+    mapping = {
+        "Compared by aligned primary key columns. String comparison is case-sensitive.": "已按对齐主键逐行对比，字符串比较区分大小写。",
+        "Primary keys are not aligned, so comparison falls back to row multiset mode. String comparison is case-sensitive.": "源端与目标端主键不一致，已回退为按行多重集对比，字符串比较区分大小写。",
+        "No common columns found between source and target (case-sensitive comparison).": "源端与目标端没有同名列（大小写敏感），无法执行数据对比。",
+    }
+    return mapping.get(note, note)
 
 
 def _to_chinese_error_message(exc: Exception) -> str:
