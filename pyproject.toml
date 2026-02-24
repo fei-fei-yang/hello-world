@@ -11,11 +11,17 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Migration Compare Platform" }]
 dependencies = [
+  "Flask",
   "PyMySQL>=1.1.0",
 ]
 
 [project.scripts]
 migration-compare = "migration_compare.cli:main"
+migration-compare-web = "migration_compare.web:main"
 
 [tool.setuptools]
 packages = ["migration_compare"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+migration_compare = ["templates/*.html", "static/*.css"]

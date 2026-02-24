@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comparison Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Comparison Result</h1>
+      <p class="subtitle">Case-sensitive schema and data comparison report.</p>
+
+      <section class="panel summary">
+        <div class="badge {{ 'ok' if report.summary.overall_match else 'bad' }}">
+          Overall: {{ 'MATCH' if report.summary.overall_match else 'MISMATCH' }}
+        </div>
+        <ul class="metrics">
+          <li>Structure Match: <strong>{{ report.summary.structure_match }}</strong></li>
+          <li>Data Match: <strong>{{ report.summary.data_match }}</strong></li>
+          <li>Generated At: <strong>{{ report.generated_at }}</strong></li>
+        </ul>
+        <div class="buttons">
+          <a class="btn-secondary" href="/">New Comparison</a>
+          <a class="btn-secondary" href="/download/{{ report_id }}/json">Download {{ json_name }}</a>
+          <a class="btn-secondary" href="/download/{{ report_id }}/markdown">Download {{ markdown_name }}</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Endpoints</h2>
+        <div class="grid two-columns">
+          <div>
+            <h3>Source</h3>
+            <p>{{ report.source.host }}:{{ report.source.port }}</p>
+            <p>{{ report.source.database }}.{{ report.source.table }}</p>
+          </div>
+          <div>
+            <h3>Target</h3>
+            <p>{{ report.target.host }}:{{ report.target.port }}</p>
+            <p>{{ report.target.database }}.{{ report.target.table }}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Schema Differences</h2>
+        <ul class="metrics">
+          <li>Missing in Target: <code>{{ report.comparison.structure.missing_columns_in_target }}</code></li>
+          <li>Missing in Source: <code>{{ report.comparison.structure.missing_columns_in_source }}</code></li>
+          <li>Column Order Match: <strong>{{ report.comparison.structure.column_order_match }}</strong></li>
+        </ul>
+        {% if report.comparison.structure.column_definition_mismatches %}
+        <table>
+          <thead>
+            <tr>
+              <th>Column</th>
+              <th>Differences</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in report.comparison.structure.column_definition_mismatches %}
+            <tr>
+              <td>{{ item.column }}</td>
+              <td>
+                <ul>
+                  {% for field, diff in item.differences.items() %}
+                  <li>{{ field }}: source={{ diff.source }} | target={{ diff.target }}</li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p>No schema definition mismatches.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Data Differences</h2>
+        <ul class="metrics">
+          <li>Mode: <strong>{{ report.comparison.data.mode }}</strong></li>
+          <li>Compared Columns: <code>{{ report.comparison.data.compared_columns }}</code></li>
+          <li>Skipped Columns: <code>{{ report.comparison.data.skipped_columns }}</code></li>
+          <li>Key Columns: <code>{{ report.comparison.data.key_columns }}</code></li>
+          <li>Source Rows: <strong>{{ report.comparison.data.source_row_count }}</strong></li>
+          <li>Target Rows: <strong>{{ report.comparison.data.target_row_count }}</strong></li>
+          <li>Missing Rows in Target: <strong>{{ report.comparison.data.missing_rows_in_target_count }}</strong></li>
+          <li>Extra Rows in Target: <strong>{{ report.comparison.data.extra_rows_in_target_count }}</strong></li>
+          <li>Changed Rows: <strong>{{ report.comparison.data.changed_rows_count }}</strong></li>
+          <li>Duplicate Keys in Source: <strong>{{ report.comparison.data.duplicate_key_count_source }}</strong></li>
+          <li>Duplicate Keys in Target: <strong>{{ report.comparison.data.duplicate_key_count_target }}</strong></li>
+          <li>Note: {{ report.comparison.data.note }}</li>
+        </ul>
+
+        <h3>Missing Rows Samples</h3>
+        <pre>{{ report.comparison.data.missing_rows_in_target_samples }}</pre>
+
+        <h3>Extra Rows Samples</h3>
+        <pre>{{ report.comparison.data.extra_rows_in_target_samples }}</pre>
+
+        <h3>Changed Rows Samples</h3>
+        <pre>{{ report.comparison.data.changed_rows_samples }}</pre>
+      </section>
+    </main>
+  </body>
+</html>

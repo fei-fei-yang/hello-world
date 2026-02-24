@@ -11,6 +11,7 @@
    - 表结构对比（列名、类型、可空、默认值、字符集/排序规则、顺序等）
    - 数据对比（优先按主键逐行比较，无法对齐主键时退化为多重集比较）
 5. 输出对比报告（JSON + Markdown），标记不一致位置。
+6. 提供 Web 可视化界面，可在页面中填写源/目标信息并查看报告。
 
 ---
 
@@ -52,6 +53,36 @@ python -m migration_compare.cli \
 ```bash
 python -m migration_compare.cli --interactive
 ```
+
+---
+
+## Web 可视化界面
+
+启动 Web 服务：
+
+```bash
+migration-compare-web --host 127.0.0.1 --port 5000
+```
+
+或者：
+
+```bash
+python -m migration_compare.web --host 127.0.0.1 --port 5000
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:5000
+```
+
+你可以在页面中填写：
+
+- 源端：host、port、user、password、database、table
+- 目标端：host、port、user、password、database、table
+- 报告目录、样例数量上限
+
+点击 **Run Comparison** 后可直接查看结构和数据差异，并下载 JSON/Markdown 报告。
 
 ---
 
