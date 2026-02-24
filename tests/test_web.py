@@ -124,10 +124,12 @@ class WebAppTestCase(unittest.TestCase):
         json_response = self.client.get(f"/download/{report_id}/json")
         self.assertEqual(json_response.status_code, 200)
         self.assertEqual(json_response.mimetype, "application/json")
+        json_response.close()
 
         markdown_response = self.client.get(f"/download/{report_id}/markdown")
         self.assertEqual(markdown_response.status_code, 200)
         self.assertEqual(markdown_response.mimetype, "text/markdown")
+        markdown_response.close()
 
         unknown_response = self.client.get(f"/download/{report_id}/invalid")
         self.assertEqual(unknown_response.status_code, 400)
