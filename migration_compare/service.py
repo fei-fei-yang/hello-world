@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -41,5 +42,19 @@ def run_comparison(config: CompareConfig) -> dict[str, Any]:
             "structure_match": comparison_result["structure"]["is_match"],
             "data_match": comparison_result["data"]["is_match"],
         },
+        "raw_query_result": {
+            "source": _snapshot_to_dict(source_snapshot),
+            "target": _snapshot_to_dict(target_snapshot),
+        },
     }
     return report
+
+
+def _snapshot_to_dict(snapshot: Any) -> dict[str, Any]:
+    return {
+        "database": snapshot.table.database,
+        "table": snapshot.table.table,
+        "primary_key": snapshot.primary_key,
+        "columns": [asdict(column) for column in snapshot.columns],
+        "rows": snapshot.rows,
+    }

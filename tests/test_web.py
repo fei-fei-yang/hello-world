@@ -9,6 +9,7 @@ from typing import Any
 
 from migration_compare.models import CompareConfig
 from migration_compare.web import create_app
+from pymysql import err as pymysql_err
 
 
 class WebAppTestCase(unittest.TestCase):
@@ -90,25 +91,10 @@ class WebAppTestCase(unittest.TestCase):
     def test_compare_validation_error_for_missing_fields(self) -> None:
         response = self.client.post("/compare", data={"source_host": ""})
         self.assertEqual(response.status_code, 400)
-        self.assertIn("Missing required fields", response.data.decode("utf-8"))
+        self.assertIn("缺少必填字段", response.data.decode("utf-8"))
 
     def test_compare_result_and_download_endpoints(self) -> None:
-        form_data = {
-            "source_host": "10.0.0.1",
-            "source_port": "3306",
-            "source_user": "src_user",
-            "source_password": "src_pass",
-            "source_db": "db_src",
-            "source_table": "orders",
-            "target_host": "10.0.0.2",
-            "target_port": "3306",
-            "target_user": "tgt_user",
-            "target_password": "tgt_pass",
-            "target_db": "db_tgt",
-            "target_table": "orders",
-            "output_dir": str(self.base_output_dir / "reports"),
-            "max_samples": "20",
-        }
+        form_data = self._valid_form_data()
         response = self.client.post("/compare", data=form_data)
         self.assertEqual(response.status_code, 200)
         body = response.data.decode("utf-8")
@@ -133,6 +119,60 @@ class WebAppTestCase(unittest.TestCase):
 
         unknown_response = self.client.get(f"/download/{report_id}/invalid")
         self.assertEqual(unknown_response.status_code, 400)
+
+    def test_compare_error_message_for_remote_root_denied(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1045,
+                "Access denied for user 'root'@'10.182.112.138' (using password: YES)",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("无远程权限", response.data.decode("utf-8"))
+
+    def test_compare_error_message_for_host_not_allowed(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1130,
+                "Host '10.182.112.138' is not allowed to connect to this MySQL server",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("主机未授权", response.data.decode("utf-8"))
+
+    def test_compare_error_message_for_wrong_password(self) -> None:
+        def raise_error(_: CompareConfig) -> dict[str, Any]:
+            raise pymysql_err.OperationalError(
+                1045,
+                "Access denied for user 'cmp_user'@'10.182.112.138' (using password: NO)",
+            )
+
+        self.app.config["COMPARE_RUNNER"] = raise_error
+        response = self.client.post("/compare", data=self._valid_form_data())
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("密码错误", response.data.decode("utf-8"))
+
+    def _valid_form_data(self) -> dict[str, str]:
+        return {
+            "source_host": "10.0.0.1",
+            "source_port": "3306",
+            "source_user": "src_user",
+            "source_password": "src_pass",
+            "source_db": "db_src",
+            "source_table": "orders",
+            "target_host": "10.0.0.2",
+            "target_port": "3306",
+            "target_user": "tgt_user",
+            "target_password": "tgt_pass",
+            "target_db": "db_tgt",
+            "target_table": "orders",
+            "output_dir": str(self.base_output_dir / "reports"),
+            "max_samples": "20",
+        }
 
 
 if __name__ == "__main__":
